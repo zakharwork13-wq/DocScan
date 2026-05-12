@@ -1,4 +1,13 @@
-import { BarChart3, FileText, ShieldCheck, Upload } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardList,
+  FileText,
+  ShieldCheck,
+  SlidersHorizontal,
+  Upload,
+  User,
+  Users,
+} from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { useAuthStore } from "@/store/auth";
@@ -15,13 +24,16 @@ const navItems: NavItem[] = [
   { to: "/scans", label: "Сканирования", icon: FileText },
   { to: "/upload", label: "Загрузить", icon: Upload },
   { to: "/dashboard", label: "Дашборд", icon: BarChart3, roles: ["admin", "analyst"] },
+  { to: "/rules", label: "Правила детекции", icon: SlidersHorizontal, roles: ["admin"] },
+  { to: "/users", label: "Пользователи", icon: Users, roles: ["admin"] },
+  { to: "/audit", label: "Аудит", icon: ClipboardList, roles: ["admin"] },
 ];
 
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
 
   return (
-    <aside className="w-60 bg-slate-900 text-slate-100 flex flex-col">
+    <aside className="w-60 bg-slate-900 text-slate-100 flex flex-col shrink-0">
       <div className="px-6 py-5 border-b border-slate-800 flex items-center gap-3">
         <ShieldCheck className="w-7 h-7 text-brand-500" />
         <div>
@@ -30,7 +42,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           if (item.roles && !item.roles.includes(user?.role ?? "")) {
             return null;
@@ -54,6 +66,23 @@ export function Sidebar() {
             </NavLink>
           );
         })}
+
+        <div className="pt-4 mt-4 border-t border-slate-800">
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-brand-600 text-white"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white",
+              )
+            }
+          >
+            <User className="w-4 h-4" />
+            Мой профиль
+          </NavLink>
+        </div>
       </nav>
 
       <div className="px-4 py-3 border-t border-slate-800 text-xs text-slate-500">

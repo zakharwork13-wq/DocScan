@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 
 import * as authApi from "@/api/auth";
+import { useWebSocket } from "@/lib/useWebSocket";
 import { useAuthStore } from "@/store/auth";
 
 import { Sidebar } from "./Sidebar";
@@ -10,6 +11,9 @@ import { Topbar } from "./Topbar";
 export function Layout() {
   const navigate = useNavigate();
   const { user, accessToken, refreshToken, setUser, logout } = useAuthStore();
+
+  // Подключаемся к WebSocket для real-time уведомлений
+  useWebSocket();
 
   useEffect(() => {
     if (accessToken && !user) {
