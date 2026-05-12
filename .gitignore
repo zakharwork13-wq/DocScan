@@ -1,0 +1,41 @@
+# Переменные окружения (содержат секреты)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Frontend
+node_modules/
+dist/
+.next/
+frontend/dist/
+
+# Rust / WASM
+target/
+*.wasm
+pkg/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Локальные данные
+backend/storage/
+logs/
+backups/
+
+# Сертификаты
+nginx/certs/
+backend/certs/
