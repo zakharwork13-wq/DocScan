@@ -115,9 +115,9 @@ async def upload_scan(
 
     await scan_service.save_temp_file(db, scan.id, file_data)
 
-    # Отправляем задачу в Celery
-    from ....celery_app import scan_document_task
-    scan_document_task.delay(str(scan.id))
+    # Запускаем задачу через Celery (если Redis доступен) или inline
+    from ....services.task_runner import run_scan_task
+    await run_scan_task(str(scan.id))
 
     return ScanStatusResponse(id=scan.id, status=scan.status)
 
@@ -244,3 +244,105 @@ async def delete_scan(scan_id: uuid.UUID, request: Request, db: DbDep) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
 
     await scan_service.soft_delete_scan(db, scan)
+
+
+# ─── GET /scans/{scan_id}/report ──────────────────────────────────────────────
+
+@router.get("/{scan_id}/report")
+async def download_scan_report(scan_id: uuid.UUID, request: Request, db: DbDep):
+    """Скачать PDF-отчёт о сканировании."""
+    from fastapi.responses import Response
+
+    current_user = await _get_current_user(request, db)
+    role_code = await _get_role_code(db, current_user.id)
+
+    scan = await scan_service.get_scan_by_id(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сканирование не найдено")
+
+    if role_code not in ("admin", "analyst") and scan.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+
+    if scan.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Отчёт доступен только для завершённых сканирований",
+        )
+
+    findings_result = await db.execute(
+        select(ScanFinding).where(ScanFinding.scan_id == scan_id)
+    )
+    findings = list(findings_result.scalars().all())
+
+    from ....services.report_service import generate_scan_report
+    pdf_bytes = generate_scan_report(scan, findings)
+
+    filename = f"docscan_report_{scan.id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ─── GET /scans/{scan_id}/redacted ────────────────────────────────────────────
+
+@router.get("/{scan_id}/redacted")
+async def download_redacted(scan_id: uuid.UUID, request: Request, db: DbDep):
+    """Скачать обезличенную копию документа (только серверное сканирование)."""
+    from pathlib import Path
+
+    from fastapi.responses import Response
+
+    current_user = await _get_current_user(request, db)
+    role_code = await _get_role_code(db, current_user.id)
+
+    scan = await scan_service.get_scan_by_id(db, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сканирование не найдено")
+
+    if role_code not in ("admin", "analyst") and scan.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+
+    if scan.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Обезличивание доступно только для завершённых сканирований",
+        )
+
+    if scan.scan_mode != "server":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Для клиентских сканирований обезличенная копия доступна сразу при загрузке",
+        )
+
+    redacted_path = Path(settings.storage_local_path) / str(scan_id) / "redacted.txt"
+    if not redacted_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Обезличенная копия недоступна (возможно, файл удалён по сроку TTL)",
+        )
+
+    content = redacted_path.read_text(encoding="utf-8")
+
+    from urllib.parse import quote
+
+    base = scan.original_filename
+    dot = base.rfind(".")
+    name = base[:dot] if dot > 0 else base
+    filename = f"{name}_обезличено.txt"
+    # RFC 5987: percent-encode для UTF-8 имён в заголовке
+    filename_encoded = quote(filename, safe="")
+    # ASCII fallback на случай если клиент не поймёт filename*
+    ascii_fallback = filename.encode("ascii", "ignore").decode() or "redacted.txt"
+
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_fallback}"; '
+                f"filename*=UTF-8''{filename_encoded}"
+            ),
+        },
+    )

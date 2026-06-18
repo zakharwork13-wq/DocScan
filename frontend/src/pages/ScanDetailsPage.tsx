@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Clock,
+  Download,
   FileText,
   Hash,
   Loader2,
@@ -98,6 +99,30 @@ export function ScanDetailsPage() {
               <span className={`badge ${categoryColor(scan.document_category)}`}>
                 {categoryLabel(scan.document_category)}
               </span>
+            )}
+            {scan.status === "completed" && (
+              <div className="flex flex-col gap-1 mt-1">
+                <button
+                  onClick={() => scansApi.downloadReport(scan.id, scan.original_filename)}
+                  className="btn-secondary !py-1 !px-2 text-xs"
+                  title="Скачать PDF-отчёт"
+                >
+                  <Download className="w-3 h-3" />
+                  Скачать отчёт
+                </button>
+                {scan.scan_mode === "server" && (
+                  <button
+                    onClick={() =>
+                      scansApi.downloadRedacted(scan.id, scan.original_filename)
+                    }
+                    className="btn-secondary !py-1 !px-2 text-xs"
+                    title="Скачать обезличенную копию текста"
+                  >
+                    <Download className="w-3 h-3" />
+                    Обезличенная копия
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
